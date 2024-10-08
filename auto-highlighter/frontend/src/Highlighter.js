@@ -8,6 +8,10 @@ const Highlighter = ({ selectedColumn, totalRows, onHighlightsChanged }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
+  // State variables for click-and-drag highlighting
+  const [isHighlighting, setIsHighlighting] = useState(false);
+  const [highlightingMode, setHighlightingMode] = useState('add');
+
   useEffect(() => {
     if (!selectedColumn) return;
 
@@ -53,13 +57,43 @@ const Highlighter = ({ selectedColumn, totalRows, onHighlightsChanged }) => {
     fetchRow();
   }, [currentIndex, selectedColumn]);
 
-  const handleTokenClick = (index) => {
-    setHighlightedTokens((prevTokens) =>
-      prevTokens.includes(index)
-        ? prevTokens.filter((i) => i !== index)
-        : [...prevTokens, index]
-    );
-    console.log(`Highlighted tokens in row ${currentIndex}:`, highlightedTokens);
+  // Handle mouseup event to stop highlighting
+  useEffect(() => {
+    const handleMouseUp = () => {
+      setIsHighlighting(false);
+    };
+    document.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, []);
+
+  const handleTokenMouseDown = (index) => (e) => {
+    e.preventDefault(); // Prevent text selection
+    const alreadyHighlighted = highlightedTokens.includes(index);
+    setIsHighlighting(true);
+    setHighlightingMode(alreadyHighlighted ? 'remove' : 'add');
+    toggleHighlight(index, highlightingMode);
+  };
+
+  const handleTokenMouseOver = (index) => {
+    if (isHighlighting) {
+      toggleHighlight(index, highlightingMode);
+    }
+  };
+
+  const toggleHighlight = (index, mode) => {
+    setHighlightedTokens((prevTokens) => {
+      if (mode === 'add') {
+        if (!prevTokens.includes(index)) {
+          return [...prevTokens, index];
+        }
+        return prevTokens;
+      } else if (mode === 'remove') {
+        return prevTokens.filter((i) => i !== index);
+      }
+      return prevTokens;
+    });
   };
 
   const handleSubmit = () => {
@@ -84,14 +118,19 @@ const Highlighter = ({ selectedColumn, totalRows, onHighlightsChanged }) => {
       ) : error ? (
         <div style={{ color: 'red' }}>Error: {error}</div>
       ) : currentTokens.length > 0 ? (
-        <div style={styles.textContainer}>
+        <div
+          style={styles.textContainer}
+          // Optional: Prevent default text selection behavior in the container
+          onMouseDown={(e) => e.preventDefault()}
+        >
           <p style={styles.text}>
             {currentTokens.map((token, index) => {
               const isWord = token.trim().length > 0 && !/^\s+$/.test(token);
               return (
                 <span
                   key={index}
-                  onClick={isWord ? () => handleTokenClick(index) : undefined}
+                  onMouseDown={isWord ? handleTokenMouseDown(index) : undefined}
+                  onMouseOver={isWord ? () => handleTokenMouseOver(index) : undefined}
                   style={{
                     cursor: isWord ? 'pointer' : 'default',
                     backgroundColor: highlightedTokens.includes(index)
@@ -129,6 +168,7 @@ const styles = {
     padding: '15px',
     borderRadius: '5px',
     backgroundColor: '#f9f9f9',
+    userSelect: 'none', // Prevent text selection
   },
   text: {
     whiteSpace: 'pre-wrap',
